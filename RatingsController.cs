@@ -16,313 +16,273 @@ namespace Sabio.Web.Api.Controllers
 {
     [AllowAnonymous]
     [Route("api/ratings")]
+    [ApiController]
     public class RatingsController : BaseApiController
     {
         private readonly IRatingsService _ratingsService;
         private readonly IAuthenticationService<int> _authService;
 
-        public RatingsController(IRatingsService ratingsService, IAuthenticationService<int> authService
-        , ILogger<RatingsController> logger) : base(logger)
+        public RatingsController(
+            IRatingsService ratingsService, 
+            IAuthenticationService<int> authService,
+            ILogger<RatingsController> logger) : base(logger)
         {
-            _ratingsService = ratingsService;
-            _authService = authService;
+            _ratingsService = ratingsService ?? throw new ArgumentNullException(nameof(ratingsService));
+            _authService = authService ?? throw new ArgumentNullException(nameof(authService));
         }
 
         [HttpPost("new")]
-        public ActionResult<ItemResponse<int>> Insert(ratingAddRequest req)
+        public async Task<ActionResult<ItemResponse<int>>> InsertAsync(ratingAddRequest req)
         {
-
-            ActionResult result = null;
-            int createdBy = _authService.GetCurrentUserId();
+            if (req == null)
+            {
+                return BadRequest(new ErrorResponse("Request cannot be null"));
+            }
 
             try
             {
-                int newId = _ratingsService.Insert(req, createdBy);
-                ItemResponse<int> resp = new ItemResponse<int>();
-                resp.Item = newId;
-                result = Created201(resp);
-
+                int createdBy = _authService.GetCurrentUserId();
+                int newId = await _ratingsService.InsertAsync(req, createdBy);
+                
+                return CreatedAtAction(nameof(GetById), new { id = newId }, new ItemResponse<int> { Item = newId });
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error inserting rating");
+                return StatusCode(500, new ErrorResponse("An error occurred while creating the rating"));
             }
-
-            return result;
         }
 
         [HttpGet]
-        public ActionResult<ItemResponse<RatingModel>> GetAll()
+        public async Task<ActionResult<ItemsResponse<RatingModel>>> GetAllAsync()
         {
-            ActionResult result = null;
             try
             {
-                List<RatingModel> ratingList = _ratingsService.GetAll();
+                var ratingList = await _ratingsService.GetAllAsync();
 
+                if (ratingList == null || !ratingList.Any())
+                {
+                    return NotFound(new ErrorResponse("No ratings found"));
+                }
 
-                if (ratingList == null)
-                {
-                    result = NotFound404(new ErrorResponse("The rating list is empty."));
-                }
-                else
-                {
-                    ItemsResponse<RatingModel> resp = new ItemsResponse<RatingModel>();
-                    resp.Items = ratingList;
-                    result = Ok200(resp);
-                }
+                return Ok(new ItemsResponse<RatingModel> { Items = ratingList });
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error retrieving ratings");
+                return StatusCode(500, new ErrorResponse("An error occurred while retrieving ratings"));
             }
-
-            return result;
         }
 
         [HttpGet("products/consumer")]
-        public ActionResult<ItemsResponse<AverageProductRating>> GetConsumerProductRatings()
+        public async Task<ActionResult<ItemsResponse<AverageProductRating>>> GetConsumerProductRatingsAsync()
         {
-            ActionResult result = null;
             try
             {
+                var ratingList = await _ratingsService.GetAvgConsumerProductRatingsAsync();
 
-                List<AverageProductRating> ratingList = _ratingsService.GetAvgConsumerProductRatings();
-
-
-
-                if (ratingList == null)
+                if (ratingList == null || !ratingList.Any())
                 {
-                    result = NotFound404(new ErrorResponse("The product rating list is empty."));
+                    return NotFound(new ErrorResponse("No consumer product ratings found"));
                 }
-                else
-                {
-                    ItemsResponse<AverageProductRating> resp = new ItemsResponse<AverageProductRating>();
-                    resp.Items = ratingList;
-                    result = Ok200(resp);
-                }
+
+                return Ok(new ItemsResponse<AverageProductRating> { Items = ratingList });
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error retrieving consumer product ratings");
+                return StatusCode(500, new ErrorResponse("An error occurred while retrieving consumer product ratings"));
             }
-
-            return result;
         }
 
-        [HttpGet("products/merchant/")]
-        public ActionResult<ItemsResponse<AverageProductRating>> GetMerchantProductRatings()
+        [HttpGet("products/merchant")]
+        public async Task<ActionResult<ItemsResponse<AverageProductRating>>> GetMerchantProductRatingsAsync()
         {
-            ActionResult result = null;
-            int createdBy = _authService.GetCurrentUserId();
-
             try
             {
-                List<AverageProductRating> ratingList = _ratingsService.GetAvgMerchantProductRatings(createdBy);
+                int createdBy = _authService.GetCurrentUserId();
+                var ratingList = await _ratingsService.GetAvgMerchantProductRatingsAsync(createdBy);
 
-                if (ratingList == null)
+                if (ratingList == null || !ratingList.Any())
                 {
-                    result = NotFound404(new ErrorResponse("You do not have any product ratings to display"));
+                    return NotFound(new ErrorResponse("No merchant product ratings found for your account"));
                 }
-                else
-                {
-                    ItemsResponse<AverageProductRating> resp = new ItemsResponse<AverageProductRating>();
-                    resp.Items = ratingList;
-                    result = Ok200(resp);
-                }
+
+                return Ok(new ItemsResponse<AverageProductRating> { Items = ratingList });
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error retrieving merchant product ratings");
+                return StatusCode(500, new ErrorResponse("An error occurred while retrieving merchant product ratings"));
             }
-
-            return result;
         }
 
         [HttpGet("merchants")]
-        public ActionResult<ItemsResponse<AverageMerchantRating>> GetAvgMerchantRatings()
+        public async Task<ActionResult<ItemsResponse<AverageMerchantRating>>> GetAvgMerchantRatingsAsync()
         {
-            ActionResult result = null;
             try
             {
-                List<AverageMerchantRating> ratingList = _ratingsService.GetAvgMerchantRatings();
+                var ratingList = await _ratingsService.GetAvgMerchantRatingsAsync();
 
-                if (ratingList == null)
+                if (ratingList == null || !ratingList.Any())
                 {
-                    result = NotFound404(new ErrorResponse("You do not have any merchant ratings to display"));
+                    return NotFound(new ErrorResponse("No merchant ratings found"));
                 }
-                else
-                {
-                    ItemsResponse<AverageMerchantRating> resp = new ItemsResponse<AverageMerchantRating>();
-                    resp.Items = ratingList;
-                    result = Ok200(resp);
-                }
+
+                return Ok(new ItemsResponse<AverageMerchantRating> { Items = ratingList });
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error retrieving merchant ratings");
+                return StatusCode(500, new ErrorResponse("An error occurred while retrieving merchant ratings"));
             }
-
-            return result;
         }
 
-        [HttpGet("products/consumer/{entityId}")]
-        public ActionResult<ItemResponse<AverageProductRating>> GetConsumerProductRatingByEntityId(int entityId)
+        [HttpGet("products/consumer/{entityId:int}")]
+        public async Task<ActionResult<ItemResponse<AverageProductRating>>> GetConsumerProductRatingByEntityIdAsync(int entityId)
         {
-            ActionResult result = null;
+            if (entityId <= 0)
+            {
+                return BadRequest(new ErrorResponse("Invalid entity ID"));
+            }
+
             try
             {
-                AverageProductRating rating = _ratingsService.GetAvgConsumerProductRatingByEntityId(entityId);
+                var rating = await _ratingsService.GetAvgConsumerProductRatingByEntityIdAsync(entityId);
 
                 if (rating == null)
                 {
-                    result = NotFound404(new ErrorResponse("You do not have any product ratings to display"));
+                    return NotFound(new ErrorResponse($"No product rating found for entity ID {entityId}"));
                 }
-                else
-                {
-                    ItemResponse<AverageProductRating> resp = new ItemResponse<AverageProductRating>();
-                    resp.Item = rating;
-                    result = Ok200(resp);
-                }
+
+                return Ok(new ItemResponse<AverageProductRating> { Item = rating });
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error retrieving consumer product rating for entity {EntityId}", entityId);
+                return StatusCode(500, new ErrorResponse("An error occurred while retrieving the product rating"));
             }
-
-            return result;
         }
 
         [HttpGet("merchants/current")]
-        public ActionResult<ItemResponse<AverageMerchantRating>> GetCurrentMerchantRating()
+        public async Task<ActionResult<ItemResponse<AverageMerchantRating>>> GetCurrentMerchantRatingAsync()
         {
-            ActionResult result = null;
-
-            int merchant = _authService.GetCurrentUserId();
-            AverageMerchantRating rating = _ratingsService.GetAvgMerchantRatingByMerchant(merchant);
             try
             {
+                int merchantId = _authService.GetCurrentUserId();
+                var rating = await _ratingsService.GetAvgMerchantRatingByMerchantAsync(merchantId);
+
                 if (rating == null)
                 {
-                    result = NotFound404(new ErrorResponse("There is merchant that matches " + merchant + " in our database."));
+                    return NotFound(new ErrorResponse($"No merchant rating found for merchant ID {merchantId}"));
                 }
-                else
-                {
 
-                    ItemResponse<AverageMerchantRating> resp = new ItemResponse<AverageMerchantRating>();
-                    resp.Item = rating;
-                    result = Ok200(resp);
-                }
+                return Ok(new ItemResponse<AverageMerchantRating> { Item = rating });
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error retrieving current merchant rating");
+                return StatusCode(500, new ErrorResponse("An error occurred while retrieving the merchant rating"));
             }
-
-            return result;
         }
 
-        [HttpGet("merchants/{merchant}")]
-        public ActionResult<ItemResponse<AverageMerchantRating>> GetAvgMerchantRatingByMerchant(int merchant)
+        [HttpGet("merchants/{merchantId:int}")]
+        public async Task<ActionResult<ItemResponse<AverageMerchantRating>>> GetAvgMerchantRatingByMerchantAsync(int merchantId)
         {
-            ActionResult result = null;
-
-            AverageMerchantRating rating = _ratingsService.GetAvgMerchantRatingByMerchant(merchant);
-            try
+            if (merchantId <= 0)
             {
-                if (rating == null)
-                {
-                    result = NotFound404(new ErrorResponse("There is merchant that matches " + merchant + " in our database."));
-                }
-                else
-                {
-
-                    ItemResponse<AverageMerchantRating> resp = new ItemResponse<AverageMerchantRating>();
-                    resp.Item = rating;
-                    result = Ok200(resp);
-                }
+                return BadRequest(new ErrorResponse("Invalid merchant ID"));
             }
-            catch (Exception ex)
-            {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
-            }
-
-            return result;
-        }
-        [HttpGet("{id}")]
-        public ActionResult<ItemResponse<RatingModel>> GetById(int id)
-        {
-            ActionResult result = null;
-
-            RatingModel rating = _ratingsService.GetById(id);
 
             try
             {
+                var rating = await _ratingsService.GetAvgMerchantRatingByMerchantAsync(merchantId);
+
                 if (rating == null)
                 {
-                    result = NotFound404(new ErrorResponse("There is no id that matches " + id + " in our database."));
+                    return NotFound(new ErrorResponse($"No merchant rating found for merchant ID {merchantId}"));
                 }
-                else
-                {
 
-                    ItemResponse<RatingModel> resp = new ItemResponse<RatingModel>();
-                    resp.Item = rating;
-                    result = Ok200(resp);
-                }
+                return Ok(new ItemResponse<AverageMerchantRating> { Item = rating });
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error retrieving merchant rating for merchant {MerchantId}", merchantId);
+                return StatusCode(500, new ErrorResponse("An error occurred while retrieving the merchant rating"));
             }
-
-            return result;
         }
 
-        [HttpPut("{id}/edit")]
-        public ActionResult<SuccessResponse> Update(ProductRatingUpdateRequest req)
+        [HttpGet("{id:int}")]
+        public async Task<ActionResult<ItemResponse<RatingModel>>> GetByIdAsync(int id)
         {
-            ActionResult result = null;
+            if (id <= 0)
+            {
+                return BadRequest(new ErrorResponse("Invalid rating ID"));
+            }
 
+            try
+            {
+                var rating = await _ratingsService.GetByIdAsync(id);
+
+                if (rating == null)
+                {
+                    return NotFound(new ErrorResponse($"No rating found with ID {id}"));
+                }
+
+                return Ok(new ItemResponse<RatingModel> { Item = rating });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "Error retrieving rating with ID {RatingId}", id);
+                return StatusCode(500, new ErrorResponse("An error occurred while retrieving the rating"));
+            }
+        }
+
+        [HttpPut("{id:int}/edit")]
+        public async Task<ActionResult<SuccessResponse>> UpdateAsync(int id, ProductRatingUpdateRequest req)
+        {
+            if (req == null)
+            {
+                return BadRequest(new ErrorResponse("Request cannot be null"));
+            }
+
+            if (id <= 0)
+            {
+                return BadRequest(new ErrorResponse("Invalid rating ID"));
+            }
 
             try
             {
                 int modifiedBy = _authService.GetCurrentUserId();
-                _ratingsService.Update(req);
-                SuccessResponse resp = new SuccessResponse();
-                result = Ok200(resp);
+                await _ratingsService.UpdateAsync(req);
+                
+                return Ok(new SuccessResponse());
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error updating rating with ID {RatingId}", id);
+                return StatusCode(500, new ErrorResponse("An error occurred while updating the rating"));
             }
-            return result;
         }
 
-        [HttpDelete("{id}")]
-        public ActionResult<SuccessResponse> Delete(int id)
+        [HttpDelete("{id:int}")]
+        public async Task<ActionResult<SuccessResponse>> DeleteAsync(int id)
         {
-            ActionResult result = null;
+            if (id <= 0)
+            {
+                return BadRequest(new ErrorResponse("Invalid rating ID"));
+            }
+
             try
             {
-                _ratingsService.Delete(id);
-                SuccessResponse resp = new SuccessResponse();
-                result = Ok200(resp);
+                await _ratingsService.DeleteAsync(id);
+                return Ok(new SuccessResponse());
             }
             catch (Exception ex)
             {
-                Logger.LogError(ex.ToString());
-                result = StatusCode(500, new ErrorResponse(ex.Message.ToString()));
+                Logger.LogError(ex, "Error deleting rating with ID {RatingId}", id);
+                return StatusCode(500, new ErrorResponse("An error occurred while deleting the rating"));
             }
-            return result;
         }
     }
 }
