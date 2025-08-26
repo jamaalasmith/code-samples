@@ -8,7 +8,6 @@ using Sabio.Services.Interfaces;
 using Sabio.Web.Controllers;
 using Sabio.Web.Models.Responses;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 

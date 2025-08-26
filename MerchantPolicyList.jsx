@@ -13,21 +13,24 @@ const MerchantPolicyList = ({ currentRoles }) => {
   const [showModal, setShowModal] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [deleteId, setDeleteId] = useState("");
+  const [deleteId, setDeleteId] = useState(null);
   const [alert, setAlert] = useState({ show: false, type: '', message: '' });
+  const [isLoading, setIsLoading] = useState(false);
 
   const loadPage = useCallback(async () => {
+    setIsLoading(true);
     try {
       const data = await merchantPolicyService.getAll();
       setPolicies(data.items);
     } catch (error) {
       console.error("Failed to load policies:", error);
       setAlert({ show: true, type: 'error', message: 'Failed to load policies' });
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    console.log("Component mounted");
     loadPage();
   }, [loadPage]);
 
@@ -40,9 +43,6 @@ const MerchantPolicyList = ({ currentRoles }) => {
     setShowModal(false);
   };
 
-  const showEditModal = () => {
-    setShowEdit(true);
-  };
 
   const closeEdit = () => {
     setShowEdit(false);
@@ -69,13 +69,11 @@ const MerchantPolicyList = ({ currentRoles }) => {
   };
 
   const updateArray = (updatedPolicy) => {
-    setPolicies(prevPolicies => {
-      const updated = prevPolicies.map(policy =>
+    setPolicies(prevPolicies =>
+      prevPolicies.map(policy =>
         policy.id === updatedPolicy.id ? updatedPolicy : policy
-      );
-      console.log("Updated policies:", updated);
-      return updated;
-    });
+      )
+    );
   };
 
   const handleNewArray = (policy) => {
@@ -219,7 +217,14 @@ const MerchantPolicyList = ({ currentRoles }) => {
         role="region"
         aria-label="Merchant policies list"
       >
-        {policies.length === 0 ? (
+        {isLoading ? (
+          <div className="col-12 text-center py-4">
+            <div className="spinner-border" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </div>
+            <p className="text-muted mt-2">Loading policies...</p>
+          </div>
+        ) : policies.length === 0 ? (
           <div className="col-12 text-center py-4">
             <p className="text-muted" role="status" aria-live="polite">
               No merchant policies available.
