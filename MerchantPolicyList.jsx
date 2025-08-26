@@ -14,8 +14,7 @@ const MerchantPolicyList = ({ currentRoles }) => {
   const [showEdit, setShowEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteId, setDeleteId] = useState("");
-  const [showSuccessAlert, setShowSuccessAlert] = useState(false);
-  const [showErrorAlert, setShowErrorAlert] = useState(false);
+  const [alert, setAlert] = useState({ show: false, type: '', message: '' });
 
   const loadPage = useCallback(async () => {
     try {
@@ -23,7 +22,7 @@ const MerchantPolicyList = ({ currentRoles }) => {
       setPolicies(data.items);
     } catch (error) {
       console.error("Failed to load policies:", error);
-      setShowErrorAlert(true);
+      setAlert({ show: true, type: 'error', message: 'Failed to load policies' });
     }
   }, []);
 
@@ -34,8 +33,7 @@ const MerchantPolicyList = ({ currentRoles }) => {
 
   const openModal = () => {
     setShowModal(true);
-    setShowErrorAlert(false);
-    setShowSuccessAlert(false);
+    setAlert({ show: false, type: '', message: '' });
   };
 
   const closeModal = () => {
@@ -57,27 +55,27 @@ const MerchantPolicyList = ({ currentRoles }) => {
         prevPolicies.filter(policy => policy.id !== deleteId)
       );
       setConfirmDelete(false);
-      setShowSuccessAlert(true);
+      setAlert({ show: true, type: 'success', message: 'Policy deleted successfully' });
     } catch (error) {
       console.error("Delete error:", error);
-      setShowErrorAlert(true);
+      setAlert({ show: true, type: 'error', message: 'Failed to delete policy' });
     }
   };
 
   const onEditClick = (policy) => {
     setEditingPolicy(policy);
     setShowEdit(true);
-    setShowErrorAlert(false);
-    setShowSuccessAlert(false);
+    setAlert({ show: false, type: '', message: '' });
   };
 
   const updateArray = (updatedPolicy) => {
-    setPolicies(prevPolicies => 
-      prevPolicies.map(policy =>
+    setPolicies(prevPolicies => {
+      const updated = prevPolicies.map(policy =>
         policy.id === updatedPolicy.id ? updatedPolicy : policy
-      )
-    );
-    console.log("Updated policies:", policies);
+      );
+      console.log("Updated policies:", updated);
+      return updated;
+    });
   };
 
   const handleNewArray = (policy) => {
@@ -93,20 +91,12 @@ const MerchantPolicyList = ({ currentRoles }) => {
     setConfirmDelete(false);
   };
 
-  const openSuccessAlert = () => {
-    setShowSuccessAlert(true);
+  const showAlert = (type, message) => {
+    setAlert({ show: true, type, message });
   };
 
-  const openErrorAlert = () => {
-    setShowErrorAlert(true);
-  };
-
-  const onDismissSuccessAlert = () => {
-    setShowSuccessAlert(false);
-  };
-
-  const onDismissErrorAlert = () => {
-    setShowErrorAlert(false);
+  const dismissAlert = () => {
+    setAlert({ show: false, type: '', message: '' });
   };
 
   const renderPoliciesMap = () => {
@@ -117,10 +107,12 @@ const MerchantPolicyList = ({ currentRoles }) => {
         style={{ width: "100%" }}
       >
         <CardHeader
-          tag="h4"
+          tag="header"
           className="bg-light text-center border-0"
         >
-          <h3 className="font-weight-normal mb-0">{policy.title}</h3>
+          <h3 className="font-weight-normal mb-0" id={`policy-title-${policy.id}`}>
+            {policy.title}
+          </h3>
         </CardHeader>
         <CardBody className="p-3">
           <p className="mb-0">{policy.description}</p>
@@ -131,17 +123,21 @@ const MerchantPolicyList = ({ currentRoles }) => {
               <button
                 className="btn btn-outline-primary btn-sm"
                 onClick={() => onEditClick(policy)}
-                title="Edit"
+                aria-label={`Edit ${policy.title} policy`}
+                title="Edit policy"
               >
-                <i className="fas fa-edit" />
+                <i className="fas fa-edit" aria-hidden="true" />
+                <span className="sr-only">Edit</span>
               </button>
               <div className="flex-grow-1" />
               <button
                 className="btn btn-outline-danger btn-sm"
                 onClick={() => onDelete(policy.id)}
-                title="Delete"
+                aria-label={`Delete ${policy.title} policy`}
+                title="Delete policy"
               >
-                <i className="fas fa-trash" />
+                <i className="fas fa-trash" aria-hidden="true" />
+                <span className="sr-only">Delete</span>
               </button>
             </div>
           </CardFooter>
@@ -156,33 +152,23 @@ const MerchantPolicyList = ({ currentRoles }) => {
         <button
           className="btn btn-success mb-3"
           onClick={openModal}
+          aria-label="Add a new merchant policy"
         >
-          <i className="fas fa-plus me-2" />
+          <i className="fas fa-plus me-2" aria-hidden="true" />
           Add A New Merchant Policy
         </button>
       )}
       
-      {showSuccessAlert && (
+      {alert.show && (
         <OnAlert
-          color="success"
+          color={alert.type === 'success' ? 'success' : 'danger'}
           alertBox="alertBox"
-          fontColor="text-success"
-          icon="fas fa-check-circle"
+          fontColor={alert.type === 'success' ? 'text-success' : 'text-danger'}
+          icon={alert.type === 'success' ? 'fas fa-check-circle' : 'fas fa-exclamation-triangle'}
           alertIcon="alertIcon"
-          title="Success"
-          message="You have successfully submitted your request"
-        />
-      )}
-      
-      {showErrorAlert && (
-        <OnAlert
-          color="danger"
-          alertBox="alertBox"
-          fontColor="text-danger"
-          icon="fas fa-exclamation-triangle"
-          alertIcon="alertIcon"
-          title="Error!"
-          message="There has been an error completing your request"
+          title={alert.type === 'success' ? 'Success' : 'Error!'}
+          message={alert.message}
+          onDismiss={dismissAlert}
         />
       )}
       
@@ -200,23 +186,27 @@ const MerchantPolicyList = ({ currentRoles }) => {
         />
       )}
       
-      <Modal isOpen={showModal} toggle={closeModal}>
+      <Modal 
+        isOpen={showModal} 
+        toggle={closeModal}
+        aria-labelledby="add-policy-modal-title"
+        role="dialog"
+      >
         <MerchantPolicyPost
-          onDismissErrorAlert={onDismissErrorAlert}
-          onDismissSuccessAlert={onDismissSuccessAlert}
-          openSuccessAlert={openSuccessAlert}
-          openErrorAlert={openErrorAlert}
+          showAlert={showAlert}
           closeModal={closeModal}
           handleNewArray={handleNewArray}
         />
       </Modal>
       
-      <Modal isOpen={showEdit} toggle={closeEdit}>
+      <Modal 
+        isOpen={showEdit} 
+        toggle={closeEdit}
+        aria-labelledby="edit-policy-modal-title"
+        role="dialog"
+      >
         <MerchantPolicyUpdate
-          onDismissErrorAlert={onDismissErrorAlert}
-          onDismissSuccessAlert={onDismissSuccessAlert}
-          openSuccessAlert={openSuccessAlert}
-          openErrorAlert={openErrorAlert}
+          showAlert={showAlert}
           key={editingPolicy ? editingPolicy.id : ""}
           policy={editingPolicy}
           closeEdit={closeEdit}
@@ -224,8 +214,20 @@ const MerchantPolicyList = ({ currentRoles }) => {
         />
       </Modal>
       
-      <div className="row g-3">
-        {renderPoliciesMap()}
+      <div 
+        className="row g-3"
+        role="region"
+        aria-label="Merchant policies list"
+      >
+        {policies.length === 0 ? (
+          <div className="col-12 text-center py-4">
+            <p className="text-muted" role="status" aria-live="polite">
+              No merchant policies available.
+            </p>
+          </div>
+        ) : (
+          renderPoliciesMap()
+        )}
       </div>
     </div>
   );

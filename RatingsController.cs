@@ -14,7 +14,6 @@ using System.Threading.Tasks;
 
 namespace Sabio.Web.Api.Controllers
 {
-    [AllowAnonymous]
     [Route("api/ratings")]
     [ApiController]
     public class RatingsController : BaseApiController
@@ -32,11 +31,17 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpPost("new")]
-        public async Task<ActionResult<ItemResponse<int>>> InsertAsync(ratingAddRequest req)
+        [Authorize]
+        public async Task<ActionResult<ItemResponse<int>>> InsertAsync([FromBody] RatingAddRequest req)
         {
             if (req == null)
             {
                 return BadRequest(new ErrorResponse("Request cannot be null"));
+            }
+
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new ErrorResponse("Invalid model state"));
             }
 
             try
@@ -44,7 +49,17 @@ namespace Sabio.Web.Api.Controllers
                 int createdBy = _authService.GetCurrentUserId();
                 int newId = await _ratingsService.InsertAsync(req, createdBy);
                 
-                return CreatedAtAction(nameof(GetById), new { id = newId }, new ItemResponse<int> { Item = newId });
+                return CreatedAtAction(nameof(GetByIdAsync), new { id = newId }, new ItemResponse<int> { Item = newId });
+            }
+            catch (ArgumentException ex)
+            {
+                Logger.LogWarning(ex, "Invalid argument for rating creation");
+                return BadRequest(new ErrorResponse(ex.Message));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Logger.LogWarning(ex, "Unauthorized access attempt");
+                return Forbid();
             }
             catch (Exception ex)
             {
@@ -54,6 +69,7 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpGet]
+        [Authorize(Roles = "Admin")]
         public async Task<ActionResult<ItemsResponse<RatingModel>>> GetAllAsync()
         {
             try
@@ -75,6 +91,7 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpGet("products/consumer")]
+        [AllowAnonymous]
         public async Task<ActionResult<ItemsResponse<AverageProductRating>>> GetConsumerProductRatingsAsync()
         {
             try
@@ -96,6 +113,7 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpGet("products/merchant")]
+        [Authorize]
         public async Task<ActionResult<ItemsResponse<AverageProductRating>>> GetMerchantProductRatingsAsync()
         {
             try
@@ -118,6 +136,7 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpGet("merchants")]
+        [AllowAnonymous]
         public async Task<ActionResult<ItemsResponse<AverageMerchantRating>>> GetAvgMerchantRatingsAsync()
         {
             try
@@ -139,6 +158,7 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpGet("products/consumer/{entityId:int}")]
+        [AllowAnonymous]
         public async Task<ActionResult<ItemResponse<AverageProductRating>>> GetConsumerProductRatingByEntityIdAsync(int entityId)
         {
             if (entityId <= 0)
@@ -165,6 +185,7 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpGet("merchants/current")]
+        [Authorize]
         public async Task<ActionResult<ItemResponse<AverageMerchantRating>>> GetCurrentMerchantRatingAsync()
         {
             try
@@ -187,6 +208,7 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpGet("merchants/{merchantId:int}")]
+        [AllowAnonymous]
         public async Task<ActionResult<ItemResponse<AverageMerchantRating>>> GetAvgMerchantRatingByMerchantAsync(int merchantId)
         {
             if (merchantId <= 0)
@@ -213,6 +235,7 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpGet("{id:int}")]
+        [Authorize]
         public async Task<ActionResult<ItemResponse<RatingModel>>> GetByIdAsync(int id)
         {
             if (id <= 0)
@@ -239,7 +262,8 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpPut("{id:int}/edit")]
-        public async Task<ActionResult<SuccessResponse>> UpdateAsync(int id, ProductRatingUpdateRequest req)
+        [Authorize]
+        public async Task<ActionResult<SuccessResponse>> UpdateAsync(int id, [FromBody] ProductRatingUpdateRequest req)
         {
             if (req == null)
             {
@@ -251,12 +275,27 @@ namespace Sabio.Web.Api.Controllers
                 return BadRequest(new ErrorResponse("Invalid rating ID"));
             }
 
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new ErrorResponse("Invalid model state"));
+            }
+
             try
             {
                 int modifiedBy = _authService.GetCurrentUserId();
-                await _ratingsService.UpdateAsync(req);
+                await _ratingsService.UpdateAsync(req, modifiedBy);
                 
                 return Ok(new SuccessResponse());
+            }
+            catch (ArgumentException ex)
+            {
+                Logger.LogWarning(ex, "Invalid argument for rating update with ID {RatingId}", id);
+                return BadRequest(new ErrorResponse(ex.Message));
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Logger.LogWarning(ex, "Unauthorized access attempt for rating {RatingId}", id);
+                return Forbid();
             }
             catch (Exception ex)
             {
@@ -266,6 +305,7 @@ namespace Sabio.Web.Api.Controllers
         }
 
         [HttpDelete("{id:int}")]
+        [Authorize]
         public async Task<ActionResult<SuccessResponse>> DeleteAsync(int id)
         {
             if (id <= 0)
@@ -277,6 +317,11 @@ namespace Sabio.Web.Api.Controllers
             {
                 await _ratingsService.DeleteAsync(id);
                 return Ok(new SuccessResponse());
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                Logger.LogWarning(ex, "Unauthorized access attempt for rating deletion {RatingId}", id);
+                return Forbid();
             }
             catch (Exception ex)
             {
